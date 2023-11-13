@@ -1,7 +1,15 @@
+use std::io::{Read, Seek};
+
 pub mod wmi_buffer;
 
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
+pub struct Etl {
+    chunks: Vec<wmi_buffer::Buffer>,
+}
+
+impl Etl {
+    pub fn from<T: Read + Seek>(buf: T) -> Etl {
+        todo!()
+    }
 }
 
 #[cfg(test)]
@@ -10,7 +18,7 @@ mod tests {
 
     #[test]
     fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+        #[allow(clippy::assertions_on_constants)]
+        assert!(true);
     }
 }
