@@ -37,3 +37,7 @@ stages:
   - lint
   - test
 
+default:
+  tags:
+    - rust
+
