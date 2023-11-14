@@ -2,24 +2,51 @@ use std::io::{Error, Read, Seek};
 
 use bitflags::bitflags;
 
-pub struct Buffer {
-    pub header: Header,
-    pub content: WmiBufferContent,
-}
-
-pub struct WmiBufferContent;
-
+/// The Header of a WMI_BUFFER (WMI_BUFFER_HEADER)
+///
+/// While the structure is not documented publicly,
+/// this implementation aims to represent the header of a WMI_BUFFER as close as possible.
+///
+/// Reference: [Geoff Chappell, WMI_BUFFFER_HEADER](https://www.geoffchappell.com/studies/windows/km/ntoskrnl/inc/api/ntwmi/wmi_buffer_header/index.htm)
+// The reverse engineering work of Geoff Chappell was used as a reference
+#[derive(Debug, Clone)]
 pub struct Header {
-    node_header: NodeHeader,
-    offset: u32,
-    buffer_flags: BufferFlags,
-    buffer_type: BufferType,
+    pub node_header: NodeHeader,
+    pub offset: u32,
+    pub buffer_flags: BufferFlags,
+    pub buffer_type: BufferType,
 }
 
 impl Header {
     pub fn parse<T: Read + Seek>(buf: &mut T) -> Result<Header, Error> {
         let node_header = NodeHeader::parse(buf)?;
-        todo!();
+
+        let mut bytes = [0u8; 4];
+        buf.read_exact(&mut bytes)?;
+        let offset = u32::from_le_bytes(bytes);
+
+        let mut bytes = [0u8; 2];
+        buf.read_exact(&mut bytes)?;
+        let flag_bits = u16::from_le_bytes(bytes);
+        let buffer_flags = BufferFlags::from_bits(flag_bits).ok_or(Error::new(
+            std::io::ErrorKind::InvalidData,
+            "oh no, can't parse WMI_BUFFER_HEADER, unknown buffer flag encounterd!",
+        ))?;
+
+        let mut bytes = [0u8; 2];
+        buf.read_exact(&mut bytes)?;
+        let buffer_type: BufferType = u16::from_le_bytes(bytes).try_into()?;
+
+        Ok(Header {
+            node_header,
+            offset,
+            buffer_flags,
+            buffer_type,
+        })
+    }
+
+    pub fn get_buffer_size(&self) -> u32 {
+        self.node_header.buffer_size
     }
 }
 
@@ -27,17 +54,17 @@ type Timestamp = u64;
 
 /// Representation of the WNODE_HEADER which is part of a [WMI_BUFFER_HEADER](Header)
 #[derive(Debug, Clone)]
-struct NodeHeader {
-    buffer_size: u32,
-    saved_offset: u32,
-    current_offset: u32,
-    reference_count: u32,
-    timestamp: Timestamp,
-    sequence_number: u64,
-    clock: Clock,
-    processor: ProcessorInfo,
-    logger_id: u16,
-    state: State,
+pub struct NodeHeader {
+    pub buffer_size: u32,
+    pub saved_offset: u32,
+    pub current_offset: u32,
+    pub reference_count: u32,
+    pub timestamp: Timestamp,
+    pub sequence_number: u64,
+    pub clock: Clock,
+    pub processor: ProcessorInfo,
+    pub logger_id: u16,
+    pub state: State,
 }
 
 impl NodeHeader {
@@ -83,7 +110,7 @@ impl NodeHeader {
 
 #[derive(Debug, Clone)]
 #[repr(u8)]
-enum ClockType {
+pub enum ClockType {
     /// Default clock or not specified
     Default = 0x0,
     /// Query Performance Counter (QPC)
@@ -95,9 +122,9 @@ enum ClockType {
 }
 
 #[derive(Debug, Clone)]
-struct Clock {
-    clock_type: ClockType,
-    frequency: u64,
+pub struct Clock {
+    pub clock_type: ClockType,
+    pub frequency: u64,
 }
 impl From<u64> for Clock {
     fn from(value: u64) -> Self {
@@ -115,7 +142,7 @@ impl From<u64> for Clock {
 }
 
 #[derive(Debug, Clone)]
-enum ProcessorInfo {
+pub enum ProcessorInfo {
     Aligned(AlignedProcessorNumber),
     Indexed(u16),
 }
@@ -126,14 +153,14 @@ impl From<u16> for ProcessorInfo {
 }
 
 #[derive(Debug, Clone)]
-struct AlignedProcessorNumber {
-    processor_number: u8,
-    alignment: u8,
+pub struct AlignedProcessorNumber {
+    pub processor_number: u8,
+    pub alignment: u8,
 }
 
 bitflags! {
     #[derive(Debug, Clone)]
-    struct State: u32 {
+    pub struct State: u32 {
         const Flush = 0x1;
         const InUse = 0x2;
         const Free = 0x4;
@@ -141,7 +168,8 @@ bitflags! {
 }
 
 bitflags! {
-    struct BufferFlags: u16 {
+    #[derive(Debug, Clone)]
+    pub struct BufferFlags: u16 {
         const FlushMarker = 0x01;
         const EventsLost = 0x02;
         const BufferLost = 0x04;
@@ -152,7 +180,9 @@ bitflags! {
     }
 }
 
-enum BufferType {
+#[derive(Debug, Clone)]
+#[repr(u16)]
+pub enum BufferType {
     /// Normal WMI-Buffer / ETL-Chunk
     Generic = 0x0,
     /// Buffer containing only Rundown-Events
@@ -166,4 +196,26 @@ enum BufferType {
     EmptyMarker = 0x6,
     DbgInfo = 0x7,
     Maximum = 0x8,
+}
+impl TryFrom<u16> for BufferType {
+    type Error = Error;
+
+    fn try_from(value: u16) -> Result<Self, Self::Error> {
+        use BufferType::*;
+        match value {
+            0x0 => Ok(Generic),
+            0x1 => Ok(Rundown),
+            0x2 => Ok(CtxSwap),
+            0x3 => Ok(RefTime),
+            0x4 => Ok(Header),
+            0x5 => Ok(Batched),
+            0x6 => Ok(EmptyMarker),
+            0x7 => Ok(DbgInfo),
+            0x8 => Ok(Maximum),
+            _ => Err(Error::new(
+                std::io::ErrorKind::InvalidData,
+                "oh no, encountered unknown variant for WMI_BUFFER_HEADER BufferType!",
+            )),
+        }
+    }
 }

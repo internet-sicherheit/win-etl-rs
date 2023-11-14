@@ -1,0 +1,39 @@
+build:
+  stage: build
+  script:
+    - cargo build
+    - cargo build --examples
+
+check-formatting:
+  stage: lint
+  script:
+    - cargo fmt -- --check
+
+clippy:
+  stage: lint
+  script:
+    - cargo clippy --examples
+    - cargo clippy
+    - cargo clippy --message-format=json | gitlab-clippy > gl-code-quality-report.json
+
+test:
+  stage: test
+  script:
+    - cargo test -- --format json --report-time -Z unstable-options | tee results.json
+    - cat results.json | cargo2junit > results.xml
+    - cat results.xml
+    - cargo tarpaulin --out Xml
+  coverage: '/^\d+.\d+% coverage/'
+  artifacts:
+    reports:
+      junit:
+        -results.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: cobertura.xml
+
+stages:
+  - build
+  - lint
+  - test
+

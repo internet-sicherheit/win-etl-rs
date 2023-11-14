@@ -3,8 +3,8 @@ name = "win-etl"
 version = "0.1.0"
 edition = "2021"
 authors = ["Marvin Gudel <marvin.s.gudel@studmail.w-hs.de>"]
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "MIT"
+description = "A plattform agnostic library to parse Windows Event Trace Logs without Windows dependencies."
 
 [dependencies]
 bitflags = "2.4.1"
