@@ -15,6 +15,10 @@ clippy:
     - cargo clippy --examples
     - cargo clippy
     - cargo clippy --message-format=json | gitlab-clippy > gl-code-quality-report.json
+  artifacts:
+    reports:
+      codequality: gl-code-quality-report.json
+
 
 test:
   stage: test
