@@ -19,7 +19,7 @@ clippy:
 test:
   stage: test
   script:
-    - cargo test -- --format json --report-time -Z unstable-options | tee results.json
+    - cargo +nightly test -- --format json --report-time -Z unstable-options | tee results.json
     - cat results.json | cargo2junit > results.xml
     - cat results.xml
     - cargo tarpaulin --out Xml
