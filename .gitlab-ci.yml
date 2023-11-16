@@ -27,7 +27,7 @@ test:
   artifacts:
     reports:
       junit:
-        -results.xml
+        - results.xml
       coverage_report:
         coverage_format: cobertura
         path: cobertura.xml
