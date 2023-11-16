@@ -108,7 +108,7 @@ impl NodeHeader {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ClockType {
     /// Default clock or not specified
@@ -127,17 +127,37 @@ pub struct Clock {
     pub frequency: u64,
 }
 impl From<u64> for Clock {
+    /// Convert from a 64-bit bitfield to [Clock]
     fn from(value: u64) -> Self {
+        // The two MSBits are the Type, the rest is the frequency.
         const MASK: u64 = 0b11 << 62;
         let clk_type_bits = ((value & MASK) >> 62) as u8;
         let freq = value & !MASK;
 
+        // Since we extracted the first two bits with a mask its ok to transmute here.
         let clk_type: ClockType = unsafe { core::mem::transmute(clk_type_bits) };
 
         Clock {
             clock_type: clk_type,
             frequency: freq,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_clock_parsing() {
+        use super::Clock;
+        use super::ClockType;
+
+        /// 0xC0 -> two MSBits are set -> 0x03 variant of ClockType -> CpuCycleCounter
+        let test_data: u64 = 0xC000_0000_0000_0010;
+
+        let clock: Clock = test_data.into();
+
+        assert_eq!(&clock.clock_type, &ClockType::CpuCycleCounter);
+        assert_eq!(&clock.frequency, &0x10);
     }
 }
 

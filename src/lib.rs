@@ -1,7 +1,9 @@
 #![doc = include_str!("../README.md")]
 use std::io::{Error, ErrorKind, Read, Seek, SeekFrom};
 
+pub mod trace_logfile_header;
 pub mod wmi_buffer_header;
+
 use wmi_buffer_header::Header;
 
 /// Event Trace Log (ETL)
