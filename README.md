@@ -12,9 +12,10 @@ fn main() {
     let f = File::open("examples/example.etl").unwrap();
     let reader = BufReader::new(f);
 
-    let event_log = Etl::from_buf(reader).unwrap();
+    let mut etl = Etl::from_buf(reader).unwrap();
 
-    for chunk in event_log.chunks {
+    println!("TraceLogfileHeader: {:#?}", &etl.header);
+    for chunk in etl.load_buffers().unwrap() {
         println!("{:#?}", chunk.header);
     }
 }

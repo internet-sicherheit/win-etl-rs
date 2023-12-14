@@ -1,26 +1,77 @@
 #![doc = include_str!("../README.md")]
+use log::{debug, error, info, trace};
 use std::io::{Error, ErrorKind, Read, Seek, SeekFrom};
+use win_etw_event::EtwEvent;
 
 pub mod trace_logfile_header;
 pub mod wmi_buffer_header;
 
+use trace_logfile_header::TraceLogfileHeader;
 use wmi_buffer_header::Header;
+
+use crate::wmi_buffer_header::{BufferType, WMI_BUFFER_CONTENT_OFFSET};
 
 /// Event Trace Log (ETL)
 ///
 /// Every ETL consists of a number of [ETL-chunks](EtlChunk) which are in the form of WMI_BUFFER structures.
-pub struct Etl {
-    pub chunks: Vec<EtlChunk>,
+pub struct Etl<F: Read + Seek> {
+    pub header: TraceLogfileHeader,
+    chunk_size: u32,
+    file: F,
 }
 
-impl Etl {
-    /// Load a ETL from a buffer (e.g. a file)
-    pub fn from_buf<T: Read + Seek>(mut buf: T) -> Result<Etl, Error> {
-        let mut etl = Etl { chunks: Vec::new() };
-        loop {
-            let pos = buf.stream_position()?;
+impl<F: Read + Seek> Etl<F> {
+    /// Load a ETL from a stream (e.g. a file)
+    pub fn from_buf(mut buf: F) -> Result<Etl<F>, Error> {
+        info!("Reading ETL from Stream");
+        let first_chunk_header = Header::parse(&mut buf)?;
+        if first_chunk_header.buffer_type != BufferType::Header {
+            error!(
+                "ETL file starts with buffer of type {:?}, expected BufferType::Header!",
+                first_chunk_header.buffer_type
+            );
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "File does not start with header-chunk!",
+            ));
+        }
+        trace!("Read buffer header: {first_chunk_header:?}");
 
-            let res = Header::parse(&mut buf);
+        buf.seek(SeekFrom::Start(WMI_BUFFER_CONTENT_OFFSET as u64))?;
+        info!(
+            "Found valid header-chunk, parsing header event at 0x{:X}",
+            buf.stream_position().unwrap()
+        );
+        let event = win_etw_event::parse_header(&mut buf)?;
+        let logfile_header = match event {
+            EtwEvent::SystemTraceEvent(e) => {
+                debug!("Found SystemTraceEvent");
+                trace!("SystemTraceEvent: {:#?}", &e.header);
+                TraceLogfileHeader::parse_slice(e.payload.as_slice())?
+            }
+            _ => {
+                error!("Encountered wrong event format in header chunk!");
+                return Err(Error::new(
+                    ErrorKind::InvalidInput,
+                    "File has no valid TraceLogfileHeader!",
+                ));
+            }
+        };
+        let etl = Etl {
+            header: logfile_header,
+            chunk_size: first_chunk_header.get_buffer_size(),
+            file: buf,
+        };
+        Ok(etl)
+    }
+
+    pub fn load_buffers(&mut self) -> Result<Vec<EtlChunk>, Error> {
+        self.file.seek(SeekFrom::Start(self.chunk_size as u64))?;
+        let mut chunks = Vec::new();
+        loop {
+            let pos = self.file.stream_position()?;
+
+            let res = Header::parse(&mut self.file);
             if res
                 .as_ref()
                 .is_err_and(|e| e.kind() == ErrorKind::UnexpectedEof)
@@ -30,15 +81,15 @@ impl Etl {
 
             let header = res?;
             let seek = SeekFrom::Start(pos + header.get_buffer_size() as u64);
-            buf.seek(seek)?;
+            self.file.seek(seek)?;
 
-            etl.chunks.push(EtlChunk {
+            chunks.push(EtlChunk {
                 header,
                 content: WmiBufferContent,
                 start: pos,
             })
         }
-        Ok(etl)
+        Ok(chunks)
     }
 }
 

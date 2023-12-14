@@ -8,3 +8,7 @@ description = "A plattform agnostic library to parse Windows Event Trace Logs wi
 
 [dependencies]
 bitflags = "2.4.1"
+byteorder = "1.5.0"
+log = "0.4.20"
+widestring = "1.0.2"
+win-etw-event = { git = "ssh://git@gitlab.internet-sicherheit.de/wissvert-mgudel/win-etw-event-rs.git" }

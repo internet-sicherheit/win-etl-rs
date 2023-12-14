@@ -2,6 +2,9 @@ use std::io::{Error, Read, Seek};
 
 use bitflags::bitflags;
 
+/// Content offset from start of the chunk
+pub(crate) const WMI_BUFFER_CONTENT_OFFSET: u32 = 72;
+
 /// The Header of a WMI_BUFFER (WMI_BUFFER_HEADER)
 ///
 /// While the structure is not documented publicly,
@@ -151,7 +154,7 @@ mod tests {
         use super::Clock;
         use super::ClockType;
 
-        /// 0xC0 -> two MSBits are set -> 0x03 variant of ClockType -> CpuCycleCounter
+        // 0xC0 -> two MSBits are set -> 0x03 variant of ClockType -> CpuCycleCounter
         let test_data: u64 = 0xC000_0000_0000_0010;
 
         let clock: Clock = test_data.into();
@@ -200,7 +203,7 @@ bitflags! {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[repr(u16)]
 pub enum BufferType {
     /// Normal WMI-Buffer / ETL-Chunk
