@@ -65,7 +65,8 @@ impl<F: Read + Seek> Etl<F> {
         Ok(etl)
     }
 
-    pub fn load_buffers(&mut self) -> Result<Vec<EtlChunk>, Error> {
+    /// Load all Chunks contained in the ETL
+    pub fn chunks(&mut self) -> Result<Vec<EtlChunk>, Error> {
         self.file.seek(SeekFrom::Start(self.chunk_size as u64))?;
         let mut chunks = Vec::new();
         loop {
@@ -83,13 +84,26 @@ impl<F: Read + Seek> Etl<F> {
             let seek = SeekFrom::Start(pos + header.get_buffer_size() as u64);
             self.file.seek(seek)?;
 
-            chunks.push(EtlChunk {
-                header,
-                content: WmiBufferContent,
-                start: pos,
-            })
+            chunks.push(EtlChunk { header, start: pos })
         }
         Ok(chunks)
+    }
+
+    pub fn load_events(&mut self, chunk: &EtlChunk) -> Result<Vec<EtwEvent>, Error> {
+        let seek = SeekFrom::Start(chunk.start + WMI_BUFFER_CONTENT_OFFSET as u64);
+        self.file.seek(seek)?;
+        trace!("Reading events at {:?}", seek);
+
+        let mut events = Vec::new();
+        loop {
+            if self.file.stream_position()? > chunk.start + chunk.header.get_buffer_size() as u64 {
+                break;
+            }
+            let event = win_etw_event::parse_header(&mut self.file)?;
+            self.file.seek(SeekFrom::Current(event.space() as i64))?;
+            events.push(event);
+        }
+        Ok(events)
     }
 }
 
@@ -100,11 +114,6 @@ impl<F: Read + Seek> Etl<F> {
 pub struct EtlChunk {
     /// Header of the ETL-chunk
     pub header: Header,
-    /// Content (events) in this chunk
-    pub content: WmiBufferContent,
     /// Denotes the start of the chunk in the ETL file
     pub start: u64,
 }
-
-/// Placeholder for the buffer content (to be implemented)
-pub struct WmiBufferContent;

@@ -15,7 +15,7 @@ fn main() {
     let mut etl = Etl::from_buf(reader).unwrap();
 
     println!("TraceLogfileHeader: {:#?}", &etl.header);
-    for chunk in etl.load_buffers().unwrap() {
+    for chunk in etl.chunks().unwrap() {
         println!("{:#?}", chunk.header);
     }
 }
