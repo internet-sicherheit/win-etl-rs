@@ -96,16 +96,22 @@ impl<F: Read + Seek> Etl<F> {
             "Reading events starting at 0x{:X}",
             self.file.stream_position()?
         );
+        trace!(
+            "Chunk data ends at 0x{:X}",
+            (chunk.start + chunk.header.node_header.saved_offset as u64 - 1)
+        );
 
         let mut events = Vec::new();
         loop {
-            if self.file.stream_position()? > chunk.start + chunk.header.get_buffer_size() as u64 {
+            if self.file.stream_position()?
+                >= (chunk.start + chunk.header.node_header.saved_offset as u64)
+            {
                 break;
             }
             match win_etw_event::parse_header(&mut self.file) {
                 Ok(e) => {
                     trace!("Found event of type {:?}", e.get_event_type());
-                    self.file.seek(SeekFrom::Current(e.space() as i64))?;
+                    self.file.seek(SeekFrom::Current(e.padding() as i64))?;
                     events.push(e);
                 }
                 Err(_) => break,
