@@ -1,6 +1,9 @@
 #![doc = include_str!("../README.md")]
 use log::{debug, error, info, trace};
-use std::io::{Error, ErrorKind, Read, Seek, SeekFrom};
+use std::{
+    fmt::Display,
+    io::{Error as IoError, ErrorKind as IoErrorKind, Read, Seek, SeekFrom},
+};
 use win_etw_event::EtwEvent;
 
 pub mod trace_logfile_header;
@@ -30,10 +33,10 @@ impl<F: Read + Seek> Etl<F> {
                 "ETL file starts with buffer of type {:?}, expected BufferType::Header!",
                 first_chunk_header.buffer_type
             );
-            return Err(Error::new(
-                ErrorKind::InvalidInput,
-                "File does not start with header-chunk!",
-            ));
+            return Err(Error {
+                kind: ErrorKind::MissingHeader,
+                cause: "missing header buffer for etl file".into(),
+            });
         }
         trace!("Read buffer header: {first_chunk_header:?}");
 
@@ -51,10 +54,10 @@ impl<F: Read + Seek> Etl<F> {
             }
             _ => {
                 error!("Encountered wrong event format in header chunk!");
-                return Err(Error::new(
-                    ErrorKind::InvalidInput,
-                    "File has no valid TraceLogfileHeader!",
-                ));
+                return Err(Error {
+                    kind: ErrorKind::MissingHeader,
+                    cause: "missing header event for etl file".into(),
+                });
             }
         };
         let etl = Etl {
@@ -75,7 +78,7 @@ impl<F: Read + Seek> Etl<F> {
             let res = Header::parse(&mut self.file);
             if res
                 .as_ref()
-                .is_err_and(|e| e.kind() == ErrorKind::UnexpectedEof)
+                .is_err_and(|e| e.kind() == IoErrorKind::UnexpectedEof)
             {
                 break;
             }
@@ -130,4 +133,82 @@ pub struct EtlChunk {
     pub header: Header,
     /// Denotes the start of the chunk in the ETL file
     pub start: u64,
+}
+
+#[derive(Debug)]
+pub struct Error {
+    kind: ErrorKind,
+    cause: Box<dyn std::error::Error + 'static>,
+}
+impl Error {
+    pub fn kind(&self) -> ErrorKind {
+        self.kind
+    }
+}
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(self.cause.as_ref())
+    }
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.kind {
+            ErrorKind::IoError => write!(f, "{}", self.cause),
+            ErrorKind::MissingHeader => write!(f, "missing required header"),
+            ErrorKind::UsupportedEvent => write!(f, "a unsupported event type was found"),
+            ErrorKind::ModernEventError => {
+                write!(f, "failed to process modern event: {}", self.cause)
+            }
+            ErrorKind::CorruptedHeader => write!(f, "corrupted header: {}", self.cause),
+            ErrorKind::UnsupportedMode => write!(f, "unsupported mode: {}", self.cause),
+            ErrorKind::IncompatibleType => write!(f, "incompatible type: {}", self.cause),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ErrorKind {
+    /// An error occured while reading data from a file/buffer
+    IoError,
+    /// The ETL is missing a required Header
+    MissingHeader,
+    /// ETL file header is corrupted
+    CorruptedHeader,
+    /// A unsupported event type was found
+    UsupportedEvent,
+    /// An error occured while processing a modern event
+    ModernEventError,
+    /// ETL has an unsupported mode
+    UnsupportedMode,
+    /// Conversion to a Rust type failed
+    IncompatibleType,
+}
+
+impl From<win_etw_event::Error> for Error {
+    fn from(value: win_etw_event::Error) -> Self {
+        match value {
+            win_etw_event::Error::Io(e) => Error {
+                kind: ErrorKind::IoError,
+                cause: Box::new(e),
+            },
+            win_etw_event::Error::ModernEvent(e) => Error {
+                kind: ErrorKind::ModernEventError,
+                cause: e.into(),
+            },
+            win_etw_event::Error::Unsupported => Error {
+                kind: ErrorKind::UsupportedEvent,
+                cause: "a unsupported event type was found".into(),
+            },
+        }
+    }
+}
+
+impl From<IoError> for Error {
+    fn from(value: IoError) -> Self {
+        Error {
+            kind: ErrorKind::IoError,
+            cause: value.into(),
+        }
+    }
 }
