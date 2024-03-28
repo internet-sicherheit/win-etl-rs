@@ -19,6 +19,8 @@ use crate::wmi_buffer_header::{BufferType, WMI_BUFFER_CONTENT_OFFSET};
 /// Every ETL consists of a number of [ETL-chunks](EtlChunk) which are in the form of WMI_BUFFER structures.
 pub struct Etl<F: Read + Seek> {
     pub header: TraceLogfileHeader,
+    pub timestamp_scale: f64,
+    pub timestamp_base: u64,
     chunk_size: u32,
     file: F,
 }
@@ -45,30 +47,34 @@ impl<F: Read + Seek> Etl<F> {
             "Found valid header-chunk, parsing header event at 0x{:X}",
             buf.stream_position().unwrap()
         );
+
         let event = win_etw_event::parse_header(&mut buf)?;
-        let logfile_header = match event {
-            EtwEvent::SystemTraceEvent(e) => {
-                debug!("Found SystemTraceEvent");
-                trace!("SystemTraceEvent: {:#?}", &e.header);
-                TraceLogfileHeader::parse_slice(e.payload.as_slice())?
-            }
-            _ => {
-                error!("Encountered wrong event format in header chunk!");
-                return Err(Error {
-                    kind: ErrorKind::MissingHeader,
-                    cause: "missing header event for etl file".into(),
-                });
-            }
+        let EtwEvent::SystemTraceEvent(header_system_trace_event) = event else {
+            error!("Encountered wrong event format in header chunk!");
+            return Err(Error {
+                kind: ErrorKind::MissingHeader,
+                cause: "missing header event for etl file".into(),
+            });
         };
+        debug!("Found SystemTraceEvent");
+        trace!("SystemTraceEvent: {:#?}", &header_system_trace_event.header);
+        let logfile_header =
+            TraceLogfileHeader::parse_slice(header_system_trace_event.payload.as_slice())?;
+
+        let timestamp_scale = logfile_header.get_timestamp_scale();
+        let timestamp_base =
+            logfile_header.get_timestamp_base(header_system_trace_event.header.system_time);
         let etl = Etl {
             header: logfile_header,
             chunk_size: first_chunk_header.get_buffer_size(),
             file: buf,
+            timestamp_scale,
+            timestamp_base,
         };
         Ok(etl)
     }
 
-    /// Load all Chunks contained in the ETL
+    /// Load all Chunk descriptors contained in the ETL
     pub fn chunks(&mut self) -> Result<Vec<EtlChunk>, Error> {
         self.file.seek(SeekFrom::Start(self.chunk_size as u64))?;
         let mut chunks = Vec::new();
@@ -124,7 +130,7 @@ impl<F: Read + Seek> Etl<F> {
     }
 }
 
-/// A chunk from an ETL file
+/// A chunk descriptor from an ETL file
 ///
 /// Each Chunk is in the form of a WMI_BUFFER.
 /// A WMI_BUFFER always starts with a [WMI_BUFFER_HEADER](Header) followed by event objects.
