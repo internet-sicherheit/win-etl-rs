@@ -102,7 +102,7 @@ impl<F: Read + Seek> Etl<F> {
         let seek = SeekFrom::Start(chunk.start + WMI_BUFFER_CONTENT_OFFSET as u64);
         self.file.seek(seek)?;
         trace!(
-            "Reading events starting at 0x{:X}",
+            "Reading events from chunk starting at 0x{:X}",
             self.file.stream_position()?
         );
         trace!(
@@ -119,7 +119,7 @@ impl<F: Read + Seek> Etl<F> {
             }
             match win_etw_event::parse_header(&mut self.file) {
                 Ok(e) => {
-                    trace!("Found event of type {:?}", e.get_event_type());
+                    trace!("Parsed event header of type {:?}", e.get_event_type());
                     self.file.seek(SeekFrom::Current(e.padding() as i64))?;
                     events.push(e);
                 }
