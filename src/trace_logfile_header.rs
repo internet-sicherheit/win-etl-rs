@@ -33,6 +33,7 @@ pub struct TraceLogfileHeader {
     pub clock_interrupt_source: ClockInterruptSource,
     pub perf_freq: u64,
     pub start_time: u64,
+    pub buffers_lost: u32,
     pub clock_type: ClockType,
     pub logger_name: String,
     pub log_file_name: String,
@@ -190,6 +191,8 @@ impl TraceLogfileHeader {
             cause: "unknown clock type".into(),
         })?;
 
+        let buffers_lost = u32::from_le_bytes(bytes[276..280].try_into().unwrap());
+
         let mut u16_vec: Vec<u16> = vec![0; bytes[280..].len() / 2];
         if bytes[280..].len() % 2 != 0 {
             debug!("Uneven length of buffer for u16Cstrings");
@@ -230,6 +233,7 @@ impl TraceLogfileHeader {
             perf_freq,
             clock_type,
             start_time,
+            buffers_lost
         })
     }
 
