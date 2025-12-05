@@ -233,7 +233,7 @@ impl TraceLogfileHeader {
             perf_freq,
             clock_type,
             start_time,
-            buffers_lost
+            buffers_lost,
         })
     }
 
