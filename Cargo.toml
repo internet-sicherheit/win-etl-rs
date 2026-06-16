@@ -2,7 +2,7 @@
 name = "win-etl"
 version = "0.1.0"
 edition = "2021"
-authors = ["Marvin Gudel <marvin.s.gudel@studmail.w-hs.de>"]
+authors = ["Marvin Gudel <github.marvin@gudel.org>"]
 license = "MIT"
 description = "A plattform agnostic library to parse Windows Event Trace Logs without Windows dependencies."
 
@@ -12,4 +12,4 @@ num_enum = "0.7.2"
 byteorder = "1.5.0"
 log = "0.4.20"
 widestring = "1.0.2"
-win-etw-event = { git = "ssh://git@gitlab.internet-sicherheit.de/wissvert-mgudel/win-etw-event-rs.git" }
+win-etw-event = { git = "ssh://git@github.com:internet-sicherheit/win-etw-event-rs.git" }
