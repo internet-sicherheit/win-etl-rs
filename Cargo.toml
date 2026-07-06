@@ -12,4 +12,4 @@ num_enum = "0.7.2"
 byteorder = "1.5.0"
 log = "0.4.20"
 widestring = "1.0.2"
-win-etw-event = { git = "ssh://git@github.com/internet-sicherheit/win-etw-event-rs.git" }
+win-etw-event = { git = "https://github.com/internet-sicherheit/win-etw-event-rs.git" }
