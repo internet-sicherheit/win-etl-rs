@@ -194,7 +194,7 @@ impl TraceLogfileHeader {
         let buffers_lost = u32::from_le_bytes(bytes[276..280].try_into().unwrap());
 
         let mut u16_vec: Vec<u16> = vec![0; bytes[280..].len() / 2];
-        if bytes[280..].len() % 2 != 0 {
+        if !bytes[280..].len().is_multiple_of(2) {
             debug!("Uneven length of buffer for u16Cstrings");
         } else {
             LittleEndian::read_u16_into(&bytes[280..], u16_vec.as_mut_slice());
